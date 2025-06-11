@@ -1,9 +1,19 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
 import json
 import requests
 
 app = FastAPI()
+
+# ✅ CORS middleware (important!)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # You can restrict this later
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Load Discourse data
 with open("scraper/discourse_data.json", "r", encoding="utf-8") as f:
@@ -18,7 +28,8 @@ class QuestionRequest(BaseModel):
     question: str
     image: str = None  # Base64-encoded image (optional)
 
-@app.post("/")
+# ✅ Change route to match `/api/`
+@app.post("/api/")
 def answer_question(request: QuestionRequest):
     question = request.question
     image = request.image
@@ -55,7 +66,7 @@ def answer_question(request: QuestionRequest):
         })
 
     payload = {
-        "model": "sonar",  # or pplx-7b-chat if you prefer
+        "model": "sonar",  # or pplx-7b-chat
         "messages": [
             {"role": "system", "content": "You are a helpful TA for the IITM TDS course."},
             {"role": "user", "content": user_content}
