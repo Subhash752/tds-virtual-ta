@@ -2,6 +2,7 @@ import requests
 import json
 import os
 from time import sleep
+from datetime import datetime
 
 # Replace this with YOUR actual _t cookie from the browser
 COOKIES = {
@@ -16,40 +17,70 @@ BASE_URL = "https://discourse.onlinedegree.iitm.ac.in"
 CATEGORY_ID = 34  # TDS KB category ID
 DATA_FILE = "scraper/discourse_data.json"
 
+# Date Range Filter (yyyy-mm-dd)
+START_DATE = datetime.strptime("2025-01-01", "%Y-%m-%d")
+END_DATE = datetime.strptime("2025-04-14", "%Y-%m-%d")
+
 def fetch_category_topics(category_id, max_pages=10):
-    topics = []
     session = requests.Session()
     session.headers.update(HEADERS)
     session.cookies.update(COOKIES)
 
+    topics_data = []
+
     for page in range(max_pages):
         url = f"{BASE_URL}/c/courses/tds-kb/{category_id}.json?page={page}"
-        print(f"🔍 Fetching page {page}...")
+        print(f"🔍 Fetching topic list page {page}...")
 
         response = session.get(url)
         if response.status_code != 200:
-            print(f"❌ Failed to fetch page {page}, status code: {response.status_code}")
+            print(f"❌ Failed to fetch topic list: Status {response.status_code}")
             break
 
         try:
             data = response.json()
         except Exception as e:
-            print(f"⚠️ JSON decoding error: {e}")
+            print(f"⚠️ JSON decode error: {e}")
             break
 
-        if "topic_list" not in data:
-            print("⚠️ No topic_list in response.")
+        topics = data.get("topic_list", {}).get("topics", [])
+        if not topics:
             break
 
-        page_topics = data["topic_list"].get("topics", [])
-        if not page_topics:
-            print("✅ No more topics found.")
-            break
+        for topic in topics:
+            created_at = datetime.strptime(topic["created_at"][:10], "%Y-%m-%d")
+            if not (START_DATE <= created_at <= END_DATE):
+                continue  # Skip outside date range
 
-        topics.extend(page_topics)
-        sleep(0.5)  # Respectful delay
+            topic_id = topic["id"]
+            slug = topic["slug"]
+            topic_url = f"{BASE_URL}/t/{slug}/{topic_id}"
+            topic_api_url = f"{BASE_URL}/t/{topic_id}.json"
 
-    return topics
+            print(f"📄 Fetching topic content: {topic['title']}")
+
+            topic_response = session.get(topic_api_url)
+            if topic_response.status_code != 200:
+                print(f"⚠️ Failed to fetch topic {topic_id}")
+                continue
+
+            topic_data = topic_response.json()
+            posts = topic_data.get("post_stream", {}).get("posts", [])
+            if not posts:
+                continue
+
+            content = posts[0]["cooked"]  # Raw HTML, or use "raw" for markdown
+            clean_text = posts[0]["raw"]  # ← This is usually better for LLM
+
+            topics_data.append({
+                "title": topic["title"],
+                "content": clean_text.strip(),
+                "url": topic_url
+            })
+
+            sleep(0.5)  # Respectful delay
+
+    return topics_data
 
 def save_topics_to_file(topics, filepath):
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
