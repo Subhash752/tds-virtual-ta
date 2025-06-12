@@ -20,7 +20,9 @@ with open("scraper/discourse_data.json", "r", encoding="utf-8") as f:
     discourse_data = json.load(f)
 
 # Perplexity API config
-PERPLEXITY_API_KEY = "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"
+
+PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY")
+
 PERPLEXITY_API_URL = "https://api.perplexity.ai/chat/completions"
 
 # Define input schema
