@@ -21,7 +21,7 @@ with open("scraper/discourse_data.json", "r", encoding="utf-8") as f:
 
 # AIPipe Config
 AIPIPE_TOKEN ="eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6ImdlbnRsZXdpbmQwMDZAZ21haWwuY29tIn0.x6g4K-hefdH6QX7q19swXQjUK_F0MvDx4YMFaxRvLNE"# or hardcode temporarily
-AIPIPE_URL = "https://aipipe.org/openai/v1/chat/completions"
+AIPIPE_URL = "https://aipipe.org/openai/v1/responses"
 
 # Input schema
 class QuestionRequest(BaseModel):
@@ -50,7 +50,7 @@ def answer_question(request: QuestionRequest):
     ]
 
     payload = {
-        "model": "openai/gpt-4.1-nano",  # You can adjust model if needed
+        "model": "gpt-4",  # You can adjust model if needed
         "messages": messages
     }
 
