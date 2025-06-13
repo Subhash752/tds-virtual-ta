@@ -21,25 +21,28 @@ class QuestionRequest(BaseModel):
 
 
 
-
 @app.post("/api/")
 async def answer_question(request: Request):
     try:
         body_bytes = await request.body()
         raw_text = body_bytes.decode("utf-8")
 
-        # Decode even if it's a stringified string
+        # Handle incorrect stringified JSON sent by Promptfoo
         try:
+            # Try first decode
             data = json.loads(raw_text)
-            if isinstance(data, str):  # Promptfoo bug workaround
+            # If it's still a string, decode again
+            if isinstance(data, str):
                 data = json.loads(data)
-        except:
-            return {"answer": "Invalid request JSON", "links": []}
+        except Exception as e:
+            return {"answer": f"Invalid JSON format: {str(e)}", "links": []}
 
-        question = data.get("question", "")
+        question = data.get("question", "").strip()
         image = data.get("image", None)
 
-        # Context lookup
+        if not question:
+            return {"answer": "No question provided.", "links": []}
+
         context = "\n\n".join(
             f"{p['title']}\n{p['content']}"
             for p in discourse_data
@@ -47,8 +50,8 @@ async def answer_question(request: Request):
         )[:15000]
 
         payload = {
-            "model": "gpt-4",  # Supported model in AIPipe
-            "input": f"Context:\n{context}\n\nQuestion:\n{question}"  # Must use 'input', not 'messages'
+            "model": "gpt-4",
+            "input": f"Context:\n{context}\n\nQuestion:\n{question}"
         }
 
         headers = {
@@ -56,16 +59,14 @@ async def answer_question(request: Request):
             "Content-Type": "application/json"
         }
 
-        # Send to AIPipe
         response = requests.post(AIPIPE_URL, headers=headers, json=payload)
+
         if response.status_code == 200:
             res = response.json()
-            output = res.get("output", [])
-            answer = output[0]["content"] if isinstance(output, list) and "content" in output[0] else str(res)
+            answer = res["output"][0]["content"] if isinstance(res.get("output"), list) else str(res)
         else:
             answer = f"Error: {response.status_code}, {response.text}"
 
-        # Return final JSON
         return {
             "answer": answer,
             "links": [
@@ -76,5 +77,4 @@ async def answer_question(request: Request):
         }
 
     except Exception as e:
-        return {"answer": f"Internal server error: {str(e)}", "links": []}
-
+        return {"answer": f"Server error: {str(e)}", "links": []}
