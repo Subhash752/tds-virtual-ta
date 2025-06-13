@@ -48,11 +48,15 @@ def answer_question(request: QuestionRequest):
         {"role": "system", "content": "You are a helpful TA for the IITM TDS course."},
         {"role": "user", "content": f"Question: {question}\n\nContext:\n{context}"}
     ]
-
+    # Construct payload in AIPipe-compatible format
     payload = {
-        "model": "gpt-4",  # You can adjust model if needed
-        "messages": messages
+    "model": "gpt-4",  # ✅ Important: Must be explicitly specified
+    "input": {
+        "question": question,
+        "context": context
     }
+}
+
 
     headers = {
         "Authorization": f"Bearer {AIPIPE_TOKEN}",
