@@ -1,71 +1,53 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
-import json
-import requests
-import os
+import json, requests, os
 
 app = FastAPI()
-
 app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    CORSMiddleware, allow_origins=["*"], allow_credentials=True,
+    allow_methods=["*"], allow_headers=["*"],
 )
 
-# Load Discourse data
 with open("scraper/discourse_data.json", "r", encoding="utf-8") as f:
     discourse_data = json.load(f)
-AIPIPE_TOKEN=os.getenv("OPENAI_API_KEY")
-# AIPipe Config
-AIPIPE_TOKEN = "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6ImdlbnRsZXdpbmQwMDZAZ21haWwuY29tIn0.x6g4K-hefdH6QX7q19swXQjUK_F0MvDx4YMFaxRvLNE"
-AIPIPE_URL = "https://aipipe.org/openai/v1/responses"
 
-# Input schema
+AIPIPE_URL = "https://aipipe.org/openai/v1/responses"
+AIPIPE_TOKEN = os.getenv("AIPIPE_TOKEN") or "eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6ImdlbnRsZXdpbmQwMDZAZ21haWwuY29tIn0.x6g4K-hefdH6QX7q19swXQjUK_F0MvDx4YMFaxRvLNE"
+
 class QuestionRequest(BaseModel):
     question: str
-    image: str = None  # optional
+    image: str = None
 
 @app.post("/api/")
+def answer_question(req: QuestionRequest):
+    q = req.question
+    context = "\n\n".join(
+        f"{p['title']}\n{p['content']}"
+        for p in discourse_data
+        if q.lower() in p.get("title","").lower() or q.lower() in p.get("content","").lower()
+    )[:15000]  # limit length
 
-def answer_question(request: QuestionRequest):
-    question = request.question
-    image = request.image
-
-    # Match relevant posts
-    matched = []
-    for post in discourse_data:
-        if question.lower() in post.get("title", "").lower() or question.lower() in post.get("content", "").lower():
-            matched.append(post)
-        if len(matched) >= 3:
-            break
-
-    context = "\n\n".join([f"{p['title']}\n{p['content']}" for p in matched])
-
-    # Construct input string for AIPipe
-    input_text = f"Question: {question}\n\nContext:\n{context}"
-
-    # Payload
     payload = {
-        "model": "gpt-4",
-        "input": input_text
+        "model": "gpt-4",  # supported by AIPipe
+        "input": f"Context:\n{context}\n\nQuestion:\n{q}"
     }
+    headers = {"Authorization": f"Bearer {AIPIPE_TOKEN}", "Content-Type": "application/json"}
+    resp = requests.post(AIPIPE_URL, headers=headers, json=payload)
 
-    headers = {
-        "Authorization": f"Bearer {AIPIPE_TOKEN}",
-        "Content-Type": "application/json"
-    }
-
-    response = requests.post(AIPIPE_URL, headers=headers, json=payload)
-
-    if response.status_code == 200:
-        result = response.json()
-        answer = result["choices"][0]["message"]["content"]
+    if resp.status_code == 200:
+        res = resp.json()
+        if "output" in res and isinstance(res["output"], list):
+            answer = res["output"][0].get("content") or str(res["output"])
+        else:
+            answer = f"Unexpected format in response: {res}"
     else:
-        answer = f"Error: {response.status_code}, {response.text}"
+        answer = f"Error {resp.status_code}: {resp.text}"
 
-    links = [{"url": post["url"], "text": post["title"]} for post in matched]
-    return {"answer": answer, "links": links}
-
+    return {
+        "answer": answer,
+        "links": [
+            {"url": p["url"], "text": p["title"]} for p in discourse_data
+            if q.lower() in p.get("title","").lower() or q.lower() in p.get("content","").lower()
+        ][:3]
+    }
