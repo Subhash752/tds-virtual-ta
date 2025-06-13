@@ -29,6 +29,7 @@ class QuestionRequest(BaseModel):
     image: str = None  # optional
 
 @app.post("/api/")
+
 def answer_question(request: QuestionRequest):
     question = request.question
     image = request.image
@@ -43,20 +44,14 @@ def answer_question(request: QuestionRequest):
 
     context = "\n\n".join([f"{p['title']}\n{p['content']}" for p in matched])
 
-    # Construct payload
-    messages = [
-        {"role": "system", "content": "You are a helpful TA for the IITM TDS course."},
-        {"role": "user", "content": f"Question: {question}\n\nContext:\n{context}"}
-    ]
-    # Construct payload in AIPipe-compatible format
-    payload = {
-    "model": "gpt-4",  # ✅ Important: Must be explicitly specified
-    "input": {
-        "question": question,
-        "context": context
-    }
-}
+    # Construct input string for AIPipe
+    input_text = f"Question: {question}\n\nContext:\n{context}"
 
+    # Payload
+    payload = {
+        "model": "gpt-4o-mini",
+        "input": input_text
+    }
 
     headers = {
         "Authorization": f"Bearer {AIPIPE_TOKEN}",
@@ -73,3 +68,4 @@ def answer_question(request: QuestionRequest):
 
     links = [{"url": post["url"], "text": post["title"]} for post in matched]
     return {"answer": answer, "links": links}
+
