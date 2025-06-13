@@ -21,57 +21,60 @@ class QuestionRequest(BaseModel):
 
 
 
+
 @app.post("/api/")
 async def answer_question(request: Request):
     try:
-        # Promptfoo sends a JSON string as body even when content-type is JSON
         body_bytes = await request.body()
         raw_text = body_bytes.decode("utf-8")
 
-        # Handle Promptfoo-style double-encoded JSON
+        # Decode even if it's a stringified string
         try:
-            parsed = json.loads(raw_text)
-            if isinstance(parsed, str):
-                parsed = json.loads(parsed)
-        except json.JSONDecodeError:
-            return {"answer": "Invalid JSON from request", "links": []}
+            data = json.loads(raw_text)
+            if isinstance(data, str):  # Promptfoo bug workaround
+                data = json.loads(data)
+        except:
+            return {"answer": "Invalid request JSON", "links": []}
 
-        q = parsed.get("question", "")
-        image = parsed.get("image", None)
+        question = data.get("question", "")
+        image = data.get("image", None)
 
-        # Search for context
+        # Context lookup
         context = "\n\n".join(
             f"{p['title']}\n{p['content']}"
             for p in discourse_data
-            if q.lower() in p.get("title", "").lower() or q.lower() in p.get("content", "").lower()
+            if question.lower() in p.get("title", "").lower() or question.lower() in p.get("content", "").lower()
         )[:15000]
 
-        # AI pipe payload
         payload = {
-            "model": "gpt-4",
-            "input": f"Context:\n{context}\n\nQuestion:\n{q}"
+            "model": "gpt-4",  # Supported model in AIPipe
+            "input": f"Context:\n{context}\n\nQuestion:\n{question}"  # Must use 'input', not 'messages'
         }
+
         headers = {
             "Authorization": f"Bearer {AIPIPE_TOKEN}",
             "Content-Type": "application/json"
         }
 
-        resp = requests.post(AIPIPE_URL, headers=headers, json=payload)
-        if resp.status_code == 200:
-            res = resp.json()
-            answer = res["output"][0].get("content") if isinstance(res.get("output"), list) else str(res)
+        # Send to AIPipe
+        response = requests.post(AIPIPE_URL, headers=headers, json=payload)
+        if response.status_code == 200:
+            res = response.json()
+            output = res.get("output", [])
+            answer = output[0]["content"] if isinstance(output, list) and "content" in output[0] else str(res)
         else:
-            answer = f"Error {resp.status_code}: {resp.text}"
+            answer = f"Error: {response.status_code}, {response.text}"
 
+        # Return final JSON
         return {
             "answer": answer,
             "links": [
                 {"url": p["url"], "text": p["title"]}
                 for p in discourse_data
-                if q.lower() in p.get("title", "").lower() or q.lower() in p.get("content", "").lower()
+                if question.lower() in p.get("title", "").lower() or question.lower() in p.get("content", "").lower()
             ][:3]
         }
 
     except Exception as e:
-        return {"answer": f"Exception occurred: {str(e)}", "links": []}
+        return {"answer": f"Internal server error: {str(e)}", "links": []}
 
