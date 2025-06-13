@@ -20,7 +20,7 @@ with open("scraper/discourse_data.json", "r", encoding="utf-8") as f:
     discourse_data = json.load(f)
 
 # AIPipe Config
-AIPIPE_TOKEN = os.getenv("eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6ImdlbnRsZXdpbmQwMDZAZ21haWwuY29tIn0.x6g4K-hefdH6QX7q19swXQjUK_F0MvDx4YMFaxRvLNE")  # or hardcode temporarily
+AIPIPE_TOKEN = os.getenv("AIPIPE_TOKEN")  # or hardcode temporarily
 AIPIPE_URL = "https://aipipe.org/openai/v1/chat/completions"
 
 # Input schema
