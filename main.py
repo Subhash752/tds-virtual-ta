@@ -49,7 +49,7 @@ def answer_question(request: QuestionRequest):
 
     # Payload
     payload = {
-        "model": "gpt-4o-mini",
+        "model": "gpt-4",
         "input": input_text
     }
 
